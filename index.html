@@ -25,6 +25,22 @@ const SNDS={"collect": "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2Z
 const W=540,H=960,TS=60,PAD=60,ROUND_MS=15000,GRACE=1500,REC_DT=1000/30;
 const FONT='Cairo, Tahoma, Arial, sans-serif';
 const START={x:W/2,y:H-170};
+const LEVELS=[
+ {name:'الحديقة المسحورة',tint:0xffffff,ov:0,bg:0x2a8a3f,fog:0,obs:6,goal:8,ac:.0005,types:['bush','crate2','bush','stone'],
+  intro:'أول خطوة في الرحلة. اجمع 8 جواهر زرقا قبل ما أشباحك تمسكك.',outro:'نجحت! الجواهر نوّرت الطريق للصحرا.'},
+ {name:'الصحرا الحارقة',tint:0xffffff,ov:0xe0bd6a,ova:.62,bg:0xb8944a,fog:0,obs:9,goal:12,ac:.0005,types:['stone','crate','stone','crate2'],
+  intro:'الجو حر والأشباح بتستخبى ورا الصخور. اجمع 12 جوهرة.',outro:'لقيت خريطة قديمة بتقول إن مفتاح اللعنة في الغابة.'},
+ {name:'الغابة المظلمة',tint:0xffffff,ov:0x0a2a1c,ova:.5,bg:0x143a22,fog:.4,obs:12,goal:14,ac:.0005,types:['bush','bush','stone','crate'],
+  intro:'الدنيا ضلمة والشجر كتير. خلّي بالك من كل شبح. اجمع 14 جوهرة.',outro:'سمعت المراية بتنادي عليك من فوق الجبل المتلج.'},
+ {name:'جبل الجليد',tint:0xffffff,ov:0xcdeaff,ova:.6,bg:0x7fb3d9,fog:0,obs:10,goal:16,ac:.02,types:['stone','crate2','stone','bush'],
+  intro:'الأرض بتزحلق! اتحكم في حركتك كويس. اجمع 16 جوهرة.',outro:'قدامك قلعة الأشباح. دي آخر مرحلة.'},
+ {name:'قلعة الأشباح',tint:0xffffff,ov:0x5a1a55,ova:.5,bg:0x3a1230,fog:.3,obs:14,goal:20,ac:.001,types:['crate','stone','crate2','stone'],
+  intro:'المراية هنا. اجمع 20 جوهرة واكسر اللعنة!',outro:'المراية اتكسرت! أشباحك اختفت وبقيت حر. انت بطل الحكاية!'}
+];
+const PROLOGUE='مراية قديمة سحرية نسخت حركتك، وكل نسخة منك بقت شبح بيجري وراك. اعدّي 5 مراحل واجمع الجواهر عشان تكسر اللعنة.';
+function rngf(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function loadProg(){try{const p=JSON.parse(localStorage.getItem('gy_prog'));if(p&&p.stars)return p}catch(e){}return{unlocked:1,stars:[0,0,0,0,0],done:false}}
+function saveProg(p){try{localStorage.setItem('gy_prog',JSON.stringify(p))}catch(e){}}
 const TINTS=[0x66ccff,0xff7ad9,0xb892ff,0x7dffb0,0xffd36b];
 const SKINS=['zombie','robot','hitman','blue','green','brown'];
 
@@ -48,20 +64,7 @@ class Main extends Phaser.Scene{
   this.sound.on('decoded',k=>{this.sndReady[k]=1});
   this.muted=localStorage.getItem('gy_mute')==='1';
   this.best=+localStorage.getItem('gy_best')||0;
-  // ground
-  this.add.rectangle(W/2,H/2,W,H,0x2a8a3f);
-  const cols=W/TS,rows=H/TS;
-  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-   const edge=r===0||c===0||r===rows-1||c===cols-1;
-   const k=edge?'dirt':'g'+(1+((c*7+r*13)%4));
-   const im=this.add.image(c*TS+TS/2,r*TS+TS/2,k).setDisplaySize(TS,TS);
-   if(!edge&&((c+r)%3===0))im.setAngle(90*((c*r)%4));
-  }
-  // soft vignette
-  const v=this.add.graphics().setDepth(5000);
-  v.lineStyle(70,0x000000,.18);v.strokeRect(-20,-20,W+40,H+40);
-  v.lineStyle(4,0x1c120a,.7);v.strokeRect(PAD,PAD,W-2*PAD,H-2*PAD);
-  this.makeObstacles();
+  this.world=[];this.obs=[];this.lv=LEVELS[0];this.prog=loadProg();
   this.gfxJoy=this.add.graphics().setDepth(4000);
   this.ghosts=[];this.recs=[];this.gems=[];
   this.shadowG=null;
@@ -85,22 +88,45 @@ class Main extends Phaser.Scene{
   this.hBar=this.add.rectangle(18,50,W-36,7,0xffffff,.9).setOrigin(0,.5);
   this.hBarBg=this.add.rectangle(18,50,W-36,7,0x000000,.4).setOrigin(0,.5);
   this.hCombo=this.txt(W/2,28,'',24,'#ff9d4d');
+  this.hGoal=this.txt(W-58,80,'',28,'#9ff0ff',{ox:1,style:{rtl:false}});this.hGem=this.add.image(W-34,80,'gem').setScale(.75);this.hud.add([this.hGoal,this.hGem]);
   this.hud.add([this.hBarBg,this.hBar,this.hScore,this.hRound,this.hCombo]);
   this.muteBtn=this.txt(W/2,H-28,this.muted?'🔇':'🔊',30).setDepth(3500).setInteractive({useHandCursor:true});
   this.muteBtn.on('pointerdown',(p,x,y,e)=>{this.muted=!this.muted;localStorage.setItem('gy_mute',this.muted?'1':'0');this.muteBtn.setText(this.muted?'🔇':'🔊');e&&e.stopPropagation&&e.stopPropagation()});
   this.showMenu();
  }
- makeObstacles(){
+ buildLevel(i){
+  const lv=this.lv=LEVELS[i];this.lvIdx=i;
+  this.world.forEach(o=>o.destroy());this.world=[];
+  const add=o=>{this.world.push(o);return o};
+  add(this.add.rectangle(W/2,H/2,W,H,lv.bg));
+  const cols=W/TS,rows=H/TS;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+   const edge=r===0||c===0||r===rows-1||c===cols-1;
+   const k=edge?'dirt':'g'+(1+((c*7+r*13)%4));
+   const im=add(this.add.image(c*TS+TS/2,r*TS+TS/2,k).setDisplaySize(TS,TS).setTint(lv.tint));
+   if(!edge&&((c+r)%3===0))im.setAngle(90*((c*r)%4));
+  }
+  if(lv.ov)add(this.add.rectangle(W/2,H/2,W,H,lv.ov,lv.ova).setDepth(1));
+  const v=add(this.add.graphics().setDepth(5000));
+  v.lineStyle(70,0x000000,.18+lv.fog*.5);v.strokeRect(-20,-20,W+40,H+40);
+  v.lineStyle(4,0x1c120a,.7);v.strokeRect(PAD,PAD,W-2*PAD,H-2*PAD);
+  if(lv.fog){const f=add(this.add.rectangle(W/2,H/2,W,H,0x000a14,lv.fog*.55).setDepth(4900))}
+  this.makeObstacles(i);
+ }
+ makeObstacles(li){
   this.obs=[];
-  const types=[['bush',.95,24],['crate2',.95,24],['crate',.9,22],['stone',.9,22],['bush',.8,20],['crate',.8,19]];
-  let tries=0;const rnd=Phaser.Math.Between;
-  while(this.obs.length<9&&tries++<400){
+  const lv=LEVELS[li],R=rngf(li*977+13);
+  const rnd=(a,b)=>a+Math.floor(R()*(b-a+1));
+  const types=lv.types.map((t,j)=>[t,[.95,.9,.8,.95][j%4],[24,22,20,24][j%4]]);
+  let tries=0;
+  while(this.obs.length<lv.obs&&tries++<800){
    const t=types[this.obs.length%types.length];
    const x=rnd(PAD+50,W-PAD-50),y=rnd(PAD+110,H-PAD-70);
    if(Phaser.Math.Distance.Between(x,y,START.x,START.y)<150)continue;
-   if(this.obs.some(o=>Phaser.Math.Distance.Between(x,y,o.x,o.y)<110))continue;
+   if(this.obs.some(o=>Phaser.Math.Distance.Between(x,y,o.x,o.y)<100))continue;
    const sh=this.add.ellipse(x+4,y+t[2]*.6,t[2]*2,t[2]*.9,0,.28).setDepth(y-1);
    const im=this.add.image(x,y,t[0]).setScale(t[1]*1.2).setDepth(y+t[2]*.3).setAngle(rnd(0,3)*90);
+   this.world.push(sh,im);
    this.obs.push({x,y,r:t[2]*.95,im,sh});
   }
  }
@@ -117,34 +143,80 @@ class Main extends Phaser.Scene{
   c.add([me,gl,gh]);
   c.add(this.txt(W/2,390,'شبح نفسك',84,'#ffffff'));
   c.add(this.txt(W/2,462,'اهرب من نفسك!',34,'#9ff0ff'));
-  const steps=['1  اسحب صباعك على الشاشة عشان تتحرك','2  اجمع الجواهر الزرقا للنقط','3  حركتك بتبقى شبح بيجري وراك','4  لو لمسك شبح خلصت!'];
+  const steps=['1  اسحب صباعك على الشاشة عشان تتحرك','2  اجمع الجواهر الزرقا عشان تعدّي المرحلة','3  حركتك بتبقى شبح بيجري وراك','4  لو لمسك شبح ابدأ المرحلة من الأول'];
   steps.forEach((s,i)=>c.add(this.txt(W-50,540+i*58,s,22,'#ffffff',{ox:1,style:{wordWrap:{width:W-100}}})));
   const btn=this.add.rectangle(W/2,780,330,96,0xffc93a).setStrokeStyle(6,0x8a5a00).setInteractive({useHandCursor:true});
-  const bt=this.txt(W/2,780,'ابدأ اللعب',46,'#3a2200',{style:{stroke:'#ffe9a8',strokeThickness:2}});
+  const bt=this.txt(W/2,780,this.prog&&this.prog.seen?'كمّل المغامرة':'ابدأ المغامرة',44,'#3a2200',{style:{stroke:'#ffe9a8',strokeThickness:2}});
   this.tweens.add({targets:[btn,bt],scale:1.06,yoyo:true,repeat:-1,duration:600,ease:'Sine.inOut'});
-  btn.on('pointerdown',()=>{this.snd('start');this.startGame()});
+  btn.on('pointerdown',()=>{this.snd('start');this.menu.destroy();this.menu=null;this.prog.seen?this.showMap():this.showStory('المغامرة بدأت',PROLOGUE,()=>{this.prog.seen=1;saveProg(this.prog);this.showMap()})});
   c.add([btn,bt]);
-  if(this.best)c.add(this.txt(W/2,850,'أحسن نتيجة: '+this.best,26,'#ffe27a'));
+  {const n=this.prog.stars.reduce((a,b)=>a+b,0);c.add(this.txt(W/2,850,'النجوم: '+n+' / 15   ·   وصلت مرحلة '+Math.min(5,this.prog.unlocked),24,'#ffe27a'))}
   c.add(this.txt(W/2,905,'رسومات وأصوات: Kenney.nl (CC0)',18,'#bcd',{style:{strokeThickness:2}}));
   this.keys.SPACE=this.input.keyboard.addKey('SPACE');
  }
- startGame(){
+ showStory(title,text,cb,btnLabel){
+  const c=this.card=this.add.container(0,0).setDepth(6200);
+  c.add(this.add.rectangle(W/2,H/2,W,H,0x04100a,.9));
+  const me=this.add.sprite(W/2-60,250,'me').setScale(3).setRotation(-.3);
+  const gh=this.add.sprite(W/2+70,270,SKINS[(this.lvIdx||0)%6]).setScale(3).setTint(0xff7ad9).setAlpha(.6).setRotation(Math.PI+.4);
+  this.tweens.add({targets:gh,y:'+=14',yoyo:true,repeat:-1,duration:900,ease:'Sine.inOut'});
+  c.add([me,gh]);
+  c.add(this.txt(W/2,390,title,52,'#ffe27a',{style:{wordWrap:{width:W-60},align:'center'}}));
+  c.add(this.txt(W/2,540,text,30,'#ffffff',{style:{wordWrap:{width:W-90},align:'center',lineSpacing:12}}));
+  const b=this.add.rectangle(W/2,780,330,96,0xffc93a).setStrokeStyle(6,0x8a5a00).setInteractive({useHandCursor:true});
+  const bt=this.txt(W/2,780,btnLabel||'يلا!',46,'#3a2200',{style:{stroke:'#ffe9a8',strokeThickness:2}});
+  this.tweens.add({targets:[b,bt],scale:1.06,yoyo:true,repeat:-1,duration:600,ease:'Sine.inOut'});
+  b.on('pointerdown',()=>{this.snd('start');c.destroy();this.card=null;cb()});
+  c.add([b,bt]);
+ }
+ showMap(){
+  this.state='map';this.hud.setVisible(false);
+  if(this.over){this.over.destroy();this.over=null}
+  if(this.mapC){this.mapC.destroy()}
+  const c=this.mapC=this.add.container(0,0).setDepth(6100);
+  c.add(this.add.rectangle(W/2,H/2,W,H,0x0b2a1a,1));
+  c.add(this.txt(W/2,90,'خريطة المغامرة',56,'#ffe27a'));
+  const pos=[[W/2-110,780],[W/2+110,630],[W/2-110,480],[W/2+110,330],[W/2,190]];
+  const g=this.add.graphics();g.lineStyle(10,0xffffff,.2);
+  g.beginPath();g.moveTo(pos[0][0],pos[0][1]);for(let i=1;i<5;i++)g.lineTo(pos[i][0],pos[i][1]);g.strokePath();c.add(g);
+  const tints=[0x66d36f,0xe6c06a,0x3f8f5a,0x8fcfff,0xb04a90];
+  pos.forEach((p,i)=>{
+   const open=i<this.prog.unlocked;
+   const dot=this.add.circle(p[0],p[1],46,open?tints[i]:0x444444).setStrokeStyle(6,open?0xffffff:0x222222);
+   c.add(dot);
+   c.add(this.txt(p[0],p[1],String(i+1),44,open?'#ffffff':'#777777'));
+   c.add(this.txt(p[0],p[1]+72,LEVELS[i].name,24,open?'#ffffff':'#888'));
+   if(open){
+    const st=this.prog.stars[i];
+    c.add(this.txt(p[0],p[1]-70,'★'.repeat(st)+'☆'.repeat(3-st),30,'#ffd23a'));
+    dot.setInteractive({useHandCursor:true});
+    dot.on('pointerdown',()=>{this.snd('start');this.mapC.destroy();this.mapC=null;this.lvIdx=i;this.showStory('مرحلة '+(i+1)+': '+LEVELS[i].name,LEVELS[i].intro,()=>this.startLevel(i))});
+    if(i===this.prog.unlocked-1&&!this.prog.done)this.tweens.add({targets:dot,scale:1.12,yoyo:true,repeat:-1,duration:600});
+   }
+  });
+  const back=this.txt(70,H-40,'‹ رجوع',28,'#9ff0ff').setInteractive({useHandCursor:true});
+  back.on('pointerdown',()=>{this.mapC.destroy();this.mapC=null;this.showMenu()});c.add(back);
+ }
+ startLevel(i){
   if(this.menu){this.menu.destroy();this.menu=null}
   if(this.over){this.over.destroy();this.over=null}
+  this.buildLevel(i);
   this.ghosts.forEach(g=>this.killGhost(g));this.ghosts=[];this.recs=[];
   this.gems.forEach(g=>{g.s.destroy();g.gl.destroy()});this.gems=[];
-  this.score=0;this.round=0;this.combo=0;this.lastCollect=-9999;
+  this.score=0;this.round=0;this.combo=0;this.lastCollect=-9999;this.lvGems=0;
   this.hud.setVisible(true);
-  this.hScore.setText('النقاط: 0');
+  this.hScore.setText('النقاط: 0');this.updGoal();
   this.nextRound();
  }
+ updGoal(){this.hGoal.setText(this.lvGems+' / '+this.lv.goal)}
  nextRound(){
   this.round++;this.rt=0;this.recNext=0;this.rec=[];this.state='play';
   this.vel.set(0,0);this.player.setPosition(START.x,START.y).setRotation(-Math.PI/2).setAlpha(1);
   this.ghosts.forEach(g=>this.killGhost(g));this.ghosts=[];
+  if(this.recs.length>4)this.recs=this.recs.slice(-4);
   this.recs.forEach((r,i)=>this.spawnGhost(r,i));
   while(this.gems.length<6)this.spawnGem();
-  this.hRound.setText('جولة '+this.round);
+  this.hRound.setText('مرحلة '+(this.lvIdx+1)+' · جولة '+this.round);
   const n=this.recs.length;
   this.banner(n?(n===1?'شبحك ظهر! ابعد عنه':n+' أشباح وراك! اجري'):'ابدأ! حرّك صباعك',n?'#ff9bd9':'#9ff0ff');
   this.snd('tick',.5);
@@ -196,11 +268,7 @@ class Main extends Phaser.Scene{
   const p=this.player;
   this.pShadow.setPosition(p.x,p.y+16).setDepth(p.y-1);
   this.pAura.setPosition(p.x,p.y).setDepth(p.y-1);
-  if(this.state==='menu'){
-   if(this.keys.SPACE&&Phaser.Input.Keyboard.JustDown(this.keys.SPACE)){this.snd('start');this.startGame()}
-   return;
-  }
-  if(this.state==='over'&&this.keys.SPACE&&Phaser.Input.Keyboard.JustDown(this.keys.SPACE)){this.startGame();return}
+  if(this.state==='menu'){return}
   if(this.state!=='play'){this.gfxJoy.clear();return}
   const dt=Math.min(delta,50)/1000;
   this.rt+=Math.min(delta,50);
@@ -219,7 +287,7 @@ class Main extends Phaser.Scene{
    this.gfxJoy.fillStyle(0xffe27a,.75).fillCircle(this.joy.x-(this.joy.x-this.joy.ox>R?0:0),this.joy.y,30);
   }
   const m=Math.hypot(ix,iy);if(m>1){ix/=m;iy/=m}
-  const SP=250,ac=1-Math.pow(.0005,dt);
+  const SP=250,ac=1-Math.pow(this.lv.ac,dt);
   this.vel.x+=(ix*SP-this.vel.x)*ac;this.vel.y+=(iy*SP-this.vel.y)*ac;
   p.x+=this.vel.x*dt;p.y+=this.vel.y*dt;
   p.x=Phaser.Math.Clamp(p.x,PAD+16,W-PAD-16);p.y=Phaser.Math.Clamp(p.y,PAD+20,H-PAD-20);
@@ -254,7 +322,8 @@ class Main extends Phaser.Scene{
     const pts=10*this.combo;this.score+=pts;
     this.popup(g.x,g.y-20,'+'+pts+(this.combo>1?'  x'+this.combo:''),'#ffe27a',24+this.combo*2);
     this.burst(g.x,g.y,0x66e0ff,14);this.snd('collect',.55);this.buzz(12);
-    g.s.destroy();g.gl.destroy();this.gems.splice(i,1);this.spawnGem();this.updScore();
+    g.s.destroy();g.gl.destroy();this.gems.splice(i,1);this.spawnGem();this.updScore();this.lvGems++;this.updGoal();
+    if(this.lvGems>=this.lv.goal){this.levelWin();return}
    }
   }
   if(this.combo>1&&time-this.lastCollect>2500)this.combo=0;
@@ -284,30 +353,55 @@ class Main extends Phaser.Scene{
   this.tweens.add({targets:p,alpha:0,scale:2.2,duration:350});
   this.time.delayedCall(900,()=>this.showOver());
  }
+ levelWin(){
+  this.state='won';this.joy=null;this.gfxJoy.clear();
+  this.snd('clear',.8);this.buzz([30,40,30,40,60]);
+  this.burst(this.player.x,this.player.y,0xffe27a,40);
+  this.ghosts.forEach(g=>{this.tweens.add({targets:g.s,alpha:0,duration:400})});
+  const i=this.lvIdx,stars=this.round<=2?3:(this.round<=3?2:1);
+  this.prog.stars[i]=Math.max(this.prog.stars[i],stars);
+  const last=i===LEVELS.length-1;
+  if(last)this.prog.done=true;else this.prog.unlocked=Math.max(this.prog.unlocked,i+2);
+  saveProg(this.prog);
+  this.time.delayedCall(1200,()=>{
+   this.hud.setVisible(false);
+   const c=this.over=this.add.container(0,0).setDepth(6000);
+   c.add(this.add.rectangle(W/2,H/2,W,H,0x041a0e,.88));
+   c.add(this.txt(W/2,170,last?'خلصت المغامرة!':'عديت المرحلة!',64,'#7dffb0'));
+   c.add(this.txt(W/2,260,'★'.repeat(stars)+'☆'.repeat(3-stars),80,'#ffd23a'));
+   c.add(this.txt(W/2,350,'النقاط: '+this.score+'   ·   جولات: '+this.round,28,'#9ff0ff'));
+   c.add(this.txt(W/2,470,LEVELS[i].outro,30,'#ffffff',{style:{wordWrap:{width:W-90},align:'center',lineSpacing:12}}));
+   const mk=(y,label,col,stroke,fn,tc)=>{
+    const b=this.add.rectangle(W/2,y,380,86,col).setStrokeStyle(6,stroke).setInteractive({useHandCursor:true});
+    const t=this.txt(W/2,y,label,36,tc,{style:{stroke:'#ffffff',strokeThickness:1}});
+    b.on('pointerdown',fn);c.add([b,t]);
+   };
+   mk(650,last?'الخريطة':'المرحلة الجاية',0xffc93a,0x8a5a00,()=>{this.snd('start');if(last)this.showMap();else{this.over.destroy();this.over=null;const n=i+1;this.lvIdx=n;this.showStory('مرحلة '+(n+1)+': '+LEVELS[n].name,LEVELS[n].intro,()=>this.startLevel(n))}},'#3a2200');
+   mk(750,'العب المرحلة تاني',0x7dd3ff,0x1a6a8a,()=>{this.snd('start');this.startLevel(i)},'#06293a');
+   if(last)mk(850,'شارك إنجازك',0xff9bd9,0x8a2a6a,()=>this.share(),'#3a0a2a');
+   this.shareNote=this.txt(W/2,925,'',20,'#7dffb0');c.add(this.shareNote);
+   this.burst(W/2,260,0xffe27a,40);
+  });
+ }
  showOver(){
-  const rec=this.score>this.best;
-  if(rec){this.best=this.score;localStorage.setItem('gy_best',this.best)}
   this.state='over';this.hud.setVisible(false);
   const c=this.over=this.add.container(0,0).setDepth(6000);
-  c.add(this.add.rectangle(W/2,H/2,W,H,0x1a0510,.82));
-  c.add(this.txt(W/2,230,'لمسك شبحك!',70,'#ff7a9a'));
-  c.add(this.txt(W/2,330,'وصلت جولة '+this.round,34,'#9ff0ff'));
-  c.add(this.txt(W/2,430,String(this.score),110,'#ffe27a'));
-  c.add(this.txt(W/2,510,'نقطة',32,'#ffffff'));
-  c.add(this.txt(W/2,580,rec?'رقم قياسي جديد!':'أحسن نتيجة: '+this.best,rec?38:28,rec?'#7dffb0':'#bcd'));
+  c.add(this.add.rectangle(W/2,H/2,W,H,0x1a0510,.84));
+  c.add(this.txt(W/2,250,'لمسك شبحك!',70,'#ff7a9a'));
+  c.add(this.txt(W/2,350,'مرحلة '+(this.lvIdx+1)+': '+this.lv.name,32,'#9ff0ff'));
+  c.add(this.txt(W/2,450,'جمعت '+this.lvGems+' من '+this.lv.goal+' جوهرة',36,'#ffe27a'));
+  c.add(this.txt(W/2,540,'جرّب تتحرك أكتر وتبعد عن مسارك القديم',26,'#ffffff',{style:{wordWrap:{width:W-90},align:'center'}}));
   const mk=(y,label,col,stroke,fn,tc)=>{
    const b=this.add.rectangle(W/2,y,360,88,col).setStrokeStyle(6,stroke).setInteractive({useHandCursor:true});
    const t=this.txt(W/2,y,label,38,tc,{style:{stroke:'#ffffff',strokeThickness:1}});
    b.on('pointerdown',fn);c.add([b,t]);
   };
-  mk(700,'العب تاني',0xffc93a,0x8a5a00,()=>{this.snd('start');this.startGame()},'#3a2200');
-  mk(810,'شارك نتيجتك',0x7dd3ff,0x1a6a8a,()=>this.share(),'#06293a');
-  this.shareNote=this.txt(W/2,885,'',22,'#7dffb0');c.add(this.shareNote);
-  if(rec)this.burst(W/2,430,0xffe27a,40);
+  mk(700,'حاول تاني',0xffc93a,0x8a5a00,()=>{this.snd('start');this.startLevel(this.lvIdx)},'#3a2200');
+  mk(810,'الخريطة',0x7dd3ff,0x1a6a8a,()=>{this.snd('start');this.showMap()},'#06293a');
  }
  share(){
   const url='https://mohamedelsayed16399-bit.github.io/ghost-yourself-game/';
-  const text='جبت '+this.score+' نقطة ووصلت جولة '+this.round+' في لعبة شبح نفسك 👻 تقدر تكسر رقمي؟';
+  const text='خلصت مغامرة شبح نفسك كلها بـ '+this.prog.stars.reduce((a,b)=>a+b,0)+' نجمة من 15 👻 تقدر تعملها؟';
   if(navigator.share){navigator.share({text,url}).catch(()=>{});return}
   const full=text+' '+url;
   (navigator.clipboard?navigator.clipboard.writeText(full):Promise.reject()).then(()=>this.shareNote.setText('اتنسخت! ابعتها لصحابك'),()=>this.shareNote.setText(full));

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>شبح نفسك</title>
+<meta name="description" content="كل جولة حركتك بتتحول لشبح يطاردك. هتقدر تهرب من نفسك؟">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#0b0b14;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#wrap{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#hud{width:min(100vw,480px);display:flex;justify-content:space-between;padding:6px 12px;font-size:16px;font-weight:700}
+#hud span b{color:#7df9ff}
+canvas{background:#10101f;border:2px solid #2a2a4a;border-radius:12px;touch-action:none;max-width:100vw}
+.ov{position:fixed;inset:0;background:rgba(5,5,12,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;gap:12px}
+.ov.hide{display:none}
+h1{font-size:44px;margin:0;color:#7df9ff;text-shadow:0 0 20px #7df9ff88}
+p{margin:0;max-width:340px;line-height:1.7;color:#c9c9e0}
+button{font:inherit;font-size:20px;font-weight:700;padding:12px 34px;border:0;border-radius:30px;background:#7df9ff;color:#0b0b14;cursor:pointer}
+button.alt{background:#2a2a4a;color:#fff;font-size:16px;padding:10px 24px}
+#big{font-size:64px;font-weight:800;color:#ff5c8a}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud"><span>الجولة: <b id="hr">1</b></span><span>الوقت: <b id="ht">20</b></span><span>النقاط: <b id="hs">0</b></span><span>الأفضل: <b id="hb">0</b></span></div>
+  <canvas id="c" width="360" height="540"></canvas>
+</div>
+<div class="ov" id="start">
+  <h1>شبح نفسك</h1>
+  <p>اهرب 20 ثانية. في الجولة اللي بعدها كل حركة عملتها بتتحول لشبح بيعيدها ويطاردك. كل جولة بتهرب من نسخ أكتر من نفسك.</p>
+  <p>اسحب بصباعك في أي مكان عشان تتحرك (أو الأسهم / WASD). خد النقط الصفرا.</p>
+  <button id="go">ابدأ</button>
+</div>
+<div class="ov hide" id="over">
+  <div id="big">خلصت</div>
+  <p id="msg"></p>
+  <button id="again">العب تاني</button>
+  <button class="alt" id="share">انسخ نتيجتك وابعتها لصحابك</button>
+</div>
+<script>
+(function(){
+var W=360,H=540,R=10,GR=10,SPEED=2.6,TICKS=1200,GRACE=90,DT=1000/60;
+var cv=document.getElementById('c'),cx=cv.getContext('2d');
+var $=function(i){return document.getElementById(i)};
+var best=+localStorage.getItem('ghostBest')||0;$('hb').textContent=best;
+var st={run:false,round:1,tick:0,x:W/2,y:H-60,path:[],ghosts:[],orb:null,score:0,orbs:0,keys:{},dx:0,dy:0,seed:1,acc:0,last:0};
+function size(){var s=Math.min(window.innerWidth/W,(window.innerHeight-40)/H);cv.style.width=W*s+'px';cv.style.height=H*s+'px'}
+window.addEventListener('resize',size);size();
+function rnd(){st.seed=(st.seed*16807)%2147483647;return st.seed/2147483647}
+function newOrb(){st.orb={x:30+rnd()*(W-60),y:30+rnd()*(H-120)}}
+function startRound(){st.tick=0;st.x=W/2;st.y=H-60;st.path=[];st.dx=0;st.dy=0;newOrb()}
+function begin(){st.round=1;st.ghosts=[];st.score=0;st.orbs=0;st.seed=(Date.now()%100000)+1;startRound();st.run=true;st.acc=0;st.last=0;$('start').classList.add('hide');$('over').classList.add('hide');hud()}
+function hud(){$('hr').textContent=st.round;$('ht').textContent=Math.max(0,Math.ceil((TICKS-st.tick)/60));$('hs').textContent=st.score;$('hb').textContent=best}
+function dir(){
+  var dx=st.dx,dy=st.dy,k=st.keys;
+  if(k.ArrowLeft||k.a)dx-=1;if(k.ArrowRight||k.d)dx+=1;if(k.ArrowUp||k.w)dy-=1;if(k.ArrowDown||k.s)dy+=1;
+  var m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m}return [dx,dy]
+}
+function lose(){
+  st.run=false;var total=st.score;
+  if(total>best){best=total;localStorage.setItem('ghostBest',best)}
+  hud();
+  $('msg').textContent='وصلت للجولة '+st.round+' وجمعت '+st.score+' نقطة. اللي طاردك في الآخر كان انت.';
+  $('over').classList.remove('hide');
+}
+function step(){
+  var d=dir();
+  st.x=Math.max(R,Math.min(W-R,st.x+d[0]*SPEED));
+  st.y=Math.max(R,Math.min(H-R,st.y+d[1]*SPEED));
+  st.path.push([st.x,st.y]);
+  st.tick++;
+  if(st.orb&&Math.hypot(st.x-st.orb.x,st.y-st.orb.y)<R+8){st.orbs++;st.score+=10;newOrb()}
+  if(st.tick>GRACE){
+    for(var i=0;i<st.ghosts.length;i++){
+      var g=st.ghosts[i],p=g[Math.min(st.tick,g.length-1)];
+      if(Math.hypot(st.x-p[0],st.y-p[1])<R+GR-4){lose();return}
+    }
+  }
+  if(st.tick>=TICKS){
+    st.score+=50;
+    st.ghosts.push(st.path);st.round++;startRound();
+  }
+  hud()
+}
+function draw(){
+  cx.clearRect(0,0,W,H);
+  cx.strokeStyle='#1b1b33';cx.lineWidth=1;
+  for(var i=0;i<=W;i+=30){cx.beginPath();cx.moveTo(i,0);cx.lineTo(i,H);cx.stroke()}
+  for(i=0;i<=H;i+=30){cx.beginPath();cx.moveTo(0,i);cx.lineTo(W,i);cx.stroke()}
+  if(st.orb){cx.fillStyle='#ffd23f';cx.shadowColor='#ffd23f';cx.shadowBlur=14;cx.beginPath();cx.arc(st.orb.x,st.orb.y,7,0,7);cx.fill();cx.shadowBlur=0}
+  var gr=st.tick<=GRACE;
+  for(i=0;i<st.ghosts.length;i++){
+    var g=st.ghosts[i],p=g[Math.min(st.tick,g.length-1)];
+    cx.globalAlpha=gr?0.25+0.25*Math.sin(st.tick/4):0.85;
+    cx.fillStyle=gr?'#888':'#ff5c8a';cx.shadowColor='#ff5c8a';cx.shadowBlur=gr?0:12;
+    cx.beginPath();cx.arc(p[0],p[1],GR,0,7);cx.fill();
+    cx.globalAlpha=1;cx.shadowBlur=0
+  }
+  cx.fillStyle='#7df9ff';cx.shadowColor='#7df9ff';cx.shadowBlur=14;
+  cx.beginPath();cx.arc(st.x,st.y,R,0,7);cx.fill();cx.shadowBlur=0;
+  if(gr&&st.ghosts.length){cx.fillStyle='#fff';cx.font='bold 18px sans-serif';cx.textAlign='center';cx.fillText('الأشباح هتتحرك دلوقتي...',W/2,H/2)}
+}
+function loop(t){
+  if(st.run){
+    if(!st.last)st.last=t;st.acc+=Math.min(100,t-st.last);st.last=t;
+    while(st.acc>=DT&&st.run){st.acc-=DT;step()}
+  }
+  draw();requestAnimationFrame(loop)
+}
+requestAnimationFrame(loop);
+// touch / pointer: relative joystick
+var anchor=null;
+cv.addEventListener('pointerdown',function(e){anchor={x:e.clientX,y:e.clientY,id:e.pointerId};try{cv.setPointerCapture(e.pointerId)}catch(_){}e.preventDefault()});
+cv.addEventListener('pointermove',function(e){
+  if(!anchor||e.pointerId!==anchor.id)return;
+  var dx=e.clientX-anchor.x,dy=e.clientY-anchor.y,m=Math.hypot(dx,dy);
+  if(m<4){st.dx=0;st.dy=0;return}
+  var lim=40;if(m>lim){anchor.x=e.clientX-dx/m*lim;anchor.y=e.clientY-dy/m*lim;m=lim}
+  var s=Math.min(1,m/20);st.dx=dx/m*s;st.dy=dy/m*s;e.preventDefault()});
+function up(e){if(anchor&&e.pointerId===anchor.id){anchor=null;st.dx=0;st.dy=0}}
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+document.addEventListener('touchmove',function(e){e.preventDefault()},{passive:false});
+window.addEventListener('keydown',function(e){var k=e.key.length===1?e.key.toLowerCase():e.key;st.keys[k]=1;if(k.indexOf('Arrow')==0)e.preventDefault()});
+window.addEventListener('keyup',function(e){var k=e.key.length===1?e.key.toLowerCase():e.key;st.keys[k]=0});
+$('go').onclick=begin;$('again').onclick=begin;
+$('share').onclick=function(){
+  var t='لعبت "شبح نفسك" ووصلت للجولة '+st.round+' بـ '+st.score+' نقطة. تقدر تهرب من نفسك أكتر مني؟ '+location.href.split('?')[0];
+  if(navigator.share){navigator.share({text:t}).catch(function(){})}
+  else if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){$('share').textContent='اتنسخت'})}
+};
+// test hook
+window.__g={st:st,step:step,begin:begin,TICKS:TICKS};
+})();
+</script>
+</body>
+</html>

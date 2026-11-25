@@ -15,6 +15,24 @@ canvas{display:block;touch-action:none}
 <!-- Art: Kenney "Topdown Shooter" pack (CC0), https://kenney.nl / https://opengameart.org/content/topdown-shooter
      Sounds: Kenney "Interface Sounds" (CC0), https://opengameart.org/content/interface-sounds
      Engine: Phaser 3 (MIT) -->
+<meta name="description" content="كل جولة بتتحول لشبح بيطاردك في الجولة اللي بعدها. هتقدر تكسر رقمك؟ العب مجانًا من المتصفح.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ar_EG">
+<meta property="og:title" content="شبح نفسك — لعبة بتطاردك فيها نسختك القديمة">
+<meta property="og:description" content="كل جولة بتتحول لشبح بيطاردك في الجولة اللي بعدها. هتقدر تكسر رقمك؟ العب مجانًا من المتصفح.">
+<meta property="og:url" content="https://mohamedelsayed16399-bit.github.io/ghost-yourself-game/">
+<meta property="og:image" content="https://mohamedelsayed16399-bit.github.io/ghost-yourself-game/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="شبح نفسك — لعبة بتطاردك فيها نسختك القديمة">
+<meta name="twitter:description" content="كل جولة بتتحول لشبح بيطاردك في الجولة اللي بعدها. هتقدر تكسر رقمك؟ العب مجانًا من المتصفح.">
+<meta name="twitter:image" content="https://mohamedelsayed16399-bit.github.io/ghost-yourself-game/og.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 </head>
 <body>
 <div id="game"></div>
@@ -636,8 +654,28 @@ function boot(){
 }
 (document.fonts&&document.fonts.load?Promise.race([document.fonts.load('800 30px Cairo','شبح'),new Promise(r=>setTimeout(r,2500))]):Promise.resolve()).then(boot,boot);
 </script>
+<div id="mkt-ban" style="display:none;position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99999;background:rgba(20,10,35,.92);color:#fde68a;border:1px solid #a855f7;border-radius:12px;padding:8px 14px;font:700 14px system-ui,Tahoma,sans-serif;direction:rtl;text-align:center;max-width:90vw"></div>
+<button id="mkt-btn" type="button" aria-label="شارك" title="شارك اللعبة" style="position:fixed;left:8px;bottom:8px;z-index:99999;width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(88,28,135,.75);color:#fff;font-size:17px;cursor:pointer;opacity:.8;touch-action:manipulation">📤</button>
+<script>
+(function(){
+ var u="https://mohamedelsayed16399-bit.github.io/ghost-yourself-game/",t="\u0634\u0628\u062d \u0646\u0641\u0633\u0643 \u2014 \u0644\u0639\u0628\u0629 \u0628\u062a\u0637\u0627\u0631\u062f\u0643 \u0641\u064a\u0647\u0627 \u0646\u0633\u062e\u062a\u0643 \u0627\u0644\u0642\u062f\u064a\u0645\u0629";
+ var q=new URLSearchParams(location.search),c=parseInt(q.get('c'),10);
+ if(c>0){var bn=document.getElementById('mkt-ban');bn.textContent='👻 صاحبك جاب '+c+' نقطة. تقدر تكسر رقمه؟';bn.style.display='block';setTimeout(function(){bn.style.display='none'},7000);}
+ document.getElementById('mkt-btn').addEventListener('click',function(e){
+  e.stopPropagation();
+  var best=0;try{best=parseInt(localStorage.getItem('gy_best'),10)||0}catch(_){}
+  var link=best>0?u+'?c='+best:u;
+  var x=best>0?'جبت '+best+' نقطة في شبح نفسك. تقدر تكسر رقمي؟':"\u0644\u0639\u0628\u0629 \u0634\u0628\u062d \u0646\u0641\u0633\u0643: \u0643\u0644 \u062c\u0648\u0644\u0629 \u0628\u062a\u062a\u062d\u0648\u0644 \u0644\u0634\u0628\u062d \u0628\u064a\u0637\u0627\u0631\u062f\u0643. \u062a\u0642\u062f\u0631 \u062a\u0643\u0633\u0631 \u0631\u0642\u0645\u064a\u061f";
+  if(navigator.share){navigator.share({title:t,text:x,url:link}).catch(function(){});}
+  else{window.open('https://wa.me/?text='+encodeURIComponent(x+' '+link),'_blank');}
+ });
+ document.getElementById('mkt-btn').addEventListener('pointerdown',function(e){e.stopPropagation()});
+ if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});
+})();
+</script>
 </body>
 </html>
+
 
 
 

@@ -109,7 +109,30 @@ class Main extends Phaser.Scene{
   this.hPU=this.txt(W/2,84,'',26,'#ffffff');this.hud.add(this.hPU);this.hBoss=this.txt(W/2,118,'',22,'#ff6b8a');this.hud.add(this.hBoss);
   this.muteBtn=this.txt(W/2,H-28,this.muted?'🔇':'🔊',30).setDepth(3500).setInteractive({useHandCursor:true});
   this.muteBtn.on('pointerdown',(p,x,y,e)=>{this.muted=!this.muted;localStorage.setItem('gy_mute',this.muted?'1':'0');this.muteBtn.setText(this.muted?'🔇':'🔊');this.applyMute();e&&e.stopPropagation&&e.stopPropagation()});
+  this.pauseBtn=this.txt(W/2+75,H-28,'⏸',32).setDepth(3500).setInteractive({useHandCursor:true}).setVisible(false);
+  this.pauseBtn.on('pointerdown',(p,x,y,e)=>{this.togglePause();e&&e.stopPropagation&&e.stopPropagation()});
+  this.keys.P=this.input.keyboard.addKey('P');this.keys.P.on('down',()=>this.togglePause());
+  document.addEventListener('visibilitychange',()=>{if(document.hidden&&this.state==='play')this.togglePause()});
   this.showMenu();
+ }
+ togglePause(){
+  if(this.state==='play'){
+   this.state='pause';this.joy=null;this.pauseAt=this.time.now;this.pauseBtn.setText('▶');
+   const c=this.pauseC=this.add.container(0,0).setDepth(7000);
+   c.add(this.add.rectangle(W/2,H/2,W,H,0x04100a,.78));
+   c.add(this.txt(W/2,H/2-70,'⏸ إيقاف مؤقت',58,'#ffe27a'));
+   const b=this.add.rectangle(W/2,H/2+60,300,86,0xffc93a).setStrokeStyle(6,0x8a5a00).setInteractive({useHandCursor:true});
+   c.add([b,this.txt(W/2,H/2+60,'كمّل',42,'#3a2200')]);
+   b.on('pointerdown',()=>this.togglePause());
+   this.setMusic('menu',this.mroot);
+  }else if(this.state==='pause'){
+   const d=this.time.now-this.pauseAt;
+   this.speedUntil+=d;this.freezeUntil+=d;this.invUntil+=d;
+   if(this.lastCollect)this.lastCollect+=d;
+   this.state='play';this.joy=null;this.pauseBtn.setText('⏸');
+   if(this.pauseC){this.pauseC.destroy();this.pauseC=null}
+   this.setMusic(this.lv.boss?'boss':'play',this.mroot);
+  }
  }
 
  // ---------- music (procedural WebAudio, own code) ----------
@@ -401,6 +424,7 @@ class Main extends Phaser.Scene{
   const p=this.player;
   this.pShadow.setPosition(p.x,p.y+16).setDepth(p.y-1);
   this.pAura.setPosition(p.x,p.y).setDepth(p.y-1);
+  if(this.pauseBtn)this.pauseBtn.setVisible(this.state==='play'||this.state==='pause');
   if(this.state==='menu'){return}
   if(this.state!=='play'){this.gfxJoy.clear();return}
   const dt=Math.min(delta,50)/1000;
@@ -592,4 +616,5 @@ function boot(){
 </script>
 </body>
 </html>
+
 

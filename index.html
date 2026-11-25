@@ -47,6 +47,7 @@ const LEVELS=[
  {name:'عرش المراية',tint:0xffffff,ov:0x5a1a55,ova:.55,bg:0x2a0f2e,fog:.3,obs:12,goal:24,ac:.0008,b:2,h:2,boss:'ملك المرايا',types:['crate','stone','crate2','stone'],
   intro:'المعركة الأخيرة! ملك المرايا أسرع وبيهجم. اجمع 24 جوهرة واكسر اللعنة.',outro:'ملك المرايا وقع والمراية اتكسرت للأبد! أشباحك اختفت وبقيت حر. انت بطل الحكاية!'}
 ];
+LEVELS[3].k=1;LEVELS[6].k=1;LEVELS[8].k=1;LEVELS[9].k=2;
 const PROLOGUE='مراية قديمة سحرية نسخت حركتك، وكل نسخة منك بقت شبح بيجري وراك. اعدّي 10 مراحل وهزم البوسات واجمع الجواهر عشان تكسر اللعنة.';
 function rngf(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function loadProg(){try{const p=JSON.parse(localStorage.getItem('gy_prog'));if(p&&p.stars){while(p.stars.length<10)p.stars.push(0);if(p.v!==2){if(p.done)p.unlocked=Math.max(p.unlocked||1,6);p.done=false;p.v=2}return p}}catch(e){}return{v:2,unlocked:1,stars:[0,0,0,0,0,0,0,0,0,0],done:false}}
@@ -141,7 +142,7 @@ class Main extends Phaser.Scene{
  }
  setMusic(mode,root){this.mmode=mode;this.mroot=root||0}
  // ---------- foes & power-ups ----------
- clearFoes(){this.foes.forEach(f=>{f.s.destroy();f.sh.destroy();f.aura.destroy()});this.foes=[];this.pups.forEach(p=>{p.c.destroy();p.t.destroy()});this.pups=[];this.hBoss.setText('')}
+ clearFoes(){this.foes.forEach(f=>{f.s.destroy();f.sh.destroy();f.aura.destroy();if(f.wc)f.wc.destroy()});this.foes=[];this.pups.forEach(p=>{p.c.destroy();p.t.destroy()});this.pups=[];this.hBoss.setText('')}
  spawnFoes(){
   this.clearFoes();const lv=this.lv,R=Phaser.Math.Between;
   const mk=(k,x,y,tex,scale,col,r)=>{
@@ -153,6 +154,7 @@ class Main extends Phaser.Scene{
   const far=()=>{let x,y,t=0;do{x=R(PAD+40,W-PAD-40);y=R(PAD+60,H*.5)}while(t++<40&&Phaser.Math.Distance.Between(x,y,START.x,START.y)<300);return [x,y]};
   for(let i=0;i<(lv.h||0);i++){const [x,y]=far();const f=mk('h',x,y,'zombie',1.8,0xff4040,18);f.sp=64+this.lvIdx*5+this.round*2}
   for(let i=0;i<(lv.b||0);i++){const [x,y]=far();const f=mk('b',x,y,'saw',1.1,0xff7755,20);const a=Math.random()*6.28,v=150+this.lvIdx*8;f.vx=Math.cos(a)*v;f.vy=Math.sin(a)*v;f.aura.setAlpha(.15)}
+  for(let i=0;i<(lv.k||0);i++){const [x,y]=far();const f=mk('k',x,y,'robot',1.8,0xc060ff,18);f.sp=46+this.lvIdx*3;f.tp=2600+i*700}
   if(lv.boss){const f=mk('x',W/2,170,this.lvIdx>6?'zombie':'hitman',4.2,0xffffff,40);f.aura.setTint(this.lvIdx>6?0xb050ff:0xff3355).setAlpha(.22).setScale(6);f.mode='chase';f.mt=2200;f.bs=this.lvIdx>6?85:62;f.dsp=this.lvIdx>6?620:540;this.hBoss.setText('☠ '+lv.boss)}
  }
  hurt(time){
@@ -169,6 +171,13 @@ class Main extends Phaser.Scene{
      if(f.x<lo){f.x=lo;f.vx=Math.abs(f.vx)}else if(f.x>hx){f.x=hx;f.vx=-Math.abs(f.vx)}
      if(f.y<lo){f.y=lo;f.vy=Math.abs(f.vy)}else if(f.y>hy){f.y=hy;f.vy=-Math.abs(f.vy)}
      f.s.rotation+=dt*9}
+    else if(f.k==='k'){
+     f.tp-=dt*1000;const a=Math.atan2(p.y-f.y,p.x-f.x);
+     if(f.tp>900){const sp=f.sp*(grace?.3:1);f.x+=Math.cos(a)*sp*dt;f.y+=Math.sin(a)*sp*dt;f.s.rotation=a;f.s.setAlpha(1)}
+     else if(f.tp>0){f.s.setAlpha(Math.floor(time/60)%2?.25:.9);
+      if(!f.wc){f.wx=Phaser.Math.Clamp(p.x+Phaser.Math.Between(-70,70),PAD+30,W-PAD-30);f.wy=Phaser.Math.Clamp(p.y+Phaser.Math.Between(-70,70),PAD+40,H-PAD-40);f.wc=this.add.circle(f.wx,f.wy,34,0xc060ff,.3).setStrokeStyle(4,0xffffff,.8).setDepth(2);this.tweens.add({targets:f.wc,scale:1.35,yoyo:true,repeat:-1,duration:200})}}
+     else{this.burst(f.x,f.y,0xc060ff,12);f.x=f.wx||f.x;f.y=f.wy||f.y;if(f.wc){f.wc.destroy();f.wc=null}f.s.setAlpha(1);this.burst(f.x,f.y,0xc060ff,16);this.snd('tick',.4);f.tp=3200}
+    }
     else{
      f.mt-=dt*1000;
      if(f.mode==='chase'){const a=Math.atan2(p.y-f.y,p.x-f.x);const sp=f.bs*(grace?.3:1);f.x+=Math.cos(a)*sp*dt;f.y+=Math.sin(a)*sp*dt;f.s.rotation=a;f.s.setTint(f.col);if(f.mt<=0&&!grace){f.mode='tele';f.mt=800;f.ta=Math.atan2(p.y-f.y,p.x-f.x);this.snd('tick',.7)}}
@@ -185,8 +194,8 @@ class Main extends Phaser.Scene{
   return false;
  }
  spawnPU(){
-  const T=[['shield','🛡',0x4a8dff,'درع'],['speed','⚡',0xffc93a,'سرعة'],['freeze','❄',0x7fe6ff,'تجميد']];
-  const t=T[Phaser.Math.Between(0,2)];let x,y,k=0;
+  const T=[['shield','🛡',0x4a8dff,'درع'],['speed','⚡',0xffc93a,'سرعة'],['freeze','❄',0x7fe6ff,'تجميد'],['magnet','🧲',0xff5fd0,'مغناطيس'],['bomb','💣',0xff8a3a,'قنبلة']];
+  const t=T[Phaser.Math.Between(0,4)];let x,y,k=0;
   do{x=Phaser.Math.Between(PAD+40,W-PAD-40);y=Phaser.Math.Between(PAD+110,H-PAD-60)}while(k++<60&&(this.obs.some(o=>Phaser.Math.Distance.Between(x,y,o.x,o.y)<o.r+40)||Phaser.Math.Distance.Between(x,y,this.player.x,this.player.y)<130));
   const c=this.add.circle(x,y,24,t[2],.9).setStrokeStyle(4,0xffffff).setDepth(y);
   const tx=this.add.text(x,y,t[1],{fontSize:'26px'}).setOrigin(.5).setDepth(y+1);
@@ -200,14 +209,16 @@ class Main extends Phaser.Scene{
    if(age>7500){u.c.destroy();u.t.destroy();this.pups.splice(i,1);continue}
    const bl=age>5500?(Math.floor(age/120)%2?.3:1):1;u.c.setAlpha(.9*bl);u.t.setAlpha(bl);
    if(Math.hypot(u.x-p.x,u.y-p.y)<38){
-    if(u.type==='shield')this.shield=true;else if(u.type==='speed')this.speedUntil=time+4500;else this.freezeUntil=time+3200;
+    if(u.type==='shield')this.shield=true;else if(u.type==='speed')this.speedUntil=time+4500;else if(u.type==='freeze')this.freezeUntil=time+3200;
+    else if(u.type==='magnet'){for(const g of this.gems){if(Math.hypot(g.x-p.x,g.y-p.y)<330){this.tweens.killTweensOf([g.s,g.gl]);this.tweens.add({targets:[g,g.s,g.gl],x:p.x,y:p.y,duration:320,ease:'Cubic.in'})}}}
+    else{this.cameras.main.shake(260,.012);this.burst(p.x,p.y,0xff8a3a,34);for(const f of this.foes){if(f.k==='x')continue;const a=Math.atan2(f.y-p.y,f.x-p.x);f.x=Phaser.Math.Clamp(f.x+Math.cos(a)*230,PAD+f.r,W-PAD-f.r);f.y=Phaser.Math.Clamp(f.y+Math.sin(a)*230,PAD+f.r,H-PAD-f.r);this.burst(f.x,f.y,0xff8a3a,8)}this.invUntil=Math.max(this.invUntil,time+700)}
     this.snd('clear',.6);this.buzz(25);this.burst(u.x,u.y,u.col,18);this.popup(u.x,u.y-24,u.name+'!','#ffffff',32);
     u.c.destroy();u.t.destroy();this.pups.splice(i,1);
    }
   }
  }
  buildLevel(i){
-  const lv=this.lv=LEVELS[i];this.lvIdx=i;
+  const lv=this.lv=this.endless?this.elv:LEVELS[i];this.lvIdx=i;
   this.world.forEach(o=>o.destroy());this.world=[];
   const add=o=>{this.world.push(o);return o};
   add(this.add.rectangle(W/2,H/2,W,H,lv.bg));
@@ -223,11 +234,13 @@ class Main extends Phaser.Scene{
   v.lineStyle(70,0x000000,.18+lv.fog*.5);v.strokeRect(-20,-20,W+40,H+40);
   v.lineStyle(4,0x1c120a,.7);v.strokeRect(PAD,PAD,W-2*PAD,H-2*PAD);
   if(lv.fog){const f=add(this.add.rectangle(W/2,H/2,W,H,0x000a14,lv.fog*.55).setDepth(4900))}
+  {const A={1:[0xffe9a8,-1],2:[0xc8ff7a,-1],3:[0xffffff,1],4:[0xff9bd9,-1],5:[0xffffff,1],6:[0x9a8aff,-1],7:[0x9aff5a,-1],8:[0xff7a2a,-1],9:[0xd07aff,-1]}[i];
+   if(A)add(this.add.particles(0,0,'dot',{x:{min:0,max:W},y:A[1]<0?H+10:-10,lifespan:6000,speedY:A[1]<0?{min:-70,max:-30}:{min:40,max:90},speedX:{min:-18,max:18},scale:{start:.32,end:0},alpha:{start:.65,end:0},tint:A[0],blendMode:'ADD',frequency:this.lowEnd?260:130,quantity:1}).setDepth(4800))}
   this.makeObstacles(i);
  }
  makeObstacles(li){
   this.obs=[];
-  const lv=LEVELS[li],R=rngf(li*977+13);
+  const lv=this.endless?this.elv:LEVELS[li],R=rngf(li*977+13+(this.endless?this.estage*31:0));
   const rnd=(a,b)=>a+Math.floor(R()*(b-a+1));
   const types=lv.types.map((t,j)=>[t,[.95,.9,.8,.95][j%4],[24,22,20,24][j%4]]);
   let tries=0;
@@ -244,6 +257,7 @@ class Main extends Phaser.Scene{
  }
  // ---------- menu ----------
  showMenu(){
+  this.endless=false;
   this.state='menu';this.setMusic('menu',0);this.hud.setVisible(false);
   const c=this.menu=this.add.container(0,0).setDepth(6000);
   c.add(this.add.rectangle(W/2,H/2,W,H,0x04100a,.78));
@@ -282,6 +296,7 @@ class Main extends Phaser.Scene{
   c.add([b,bt]);
  }
  showMap(){
+  this.endless=false;
   this.state='map';this.setMusic('menu',0);this.hud.setVisible(false);
   if(this.over){this.over.destroy();this.over=null}
   if(this.mapC){this.mapC.destroy()}
@@ -308,6 +323,9 @@ class Main extends Phaser.Scene{
   });
   const back=this.txt(70,H-34,'‹ رجوع',28,'#9ff0ff').setInteractive({useHandCursor:true});
   back.on('pointerdown',()=>{this.mapC.destroy();this.mapC=null;this.showMenu()});c.add(back);
+  if(this.prog.done){let eb=0;try{eb=+localStorage.getItem('gy_end')||0}catch(e){}
+   const en=this.txt(W-70,H-34,'∞ اللانهاية'+(eb?' ('+eb+')':''),28,'#ffd36b').setInteractive({useHandCursor:true});
+   en.on('pointerdown',()=>{this.snd('start');this.mapC.destroy();this.mapC=null;this.startEndless(0)});c.add(en);this.tweens.add({targets:en,scale:1.1,yoyo:true,repeat:-1,duration:700})}
  }
  startLevel(i){
   if(this.menu){this.menu.destroy();this.menu=null}
@@ -444,7 +462,7 @@ class Main extends Phaser.Scene{
     this.combo=(time-this.lastCollect<2500)?Math.min(8,this.combo+1):1;this.lastCollect=time;
     const pts=10*this.combo;this.score+=pts;
     this.popup(g.x,g.y-20,'+'+pts+(this.combo>1?'  x'+this.combo:''),'#ffe27a',24+this.combo*2);
-    this.burst(g.x,g.y,0x66e0ff,14);this.snd('collect',.55);this.buzz(12);
+    this.burst(g.x,g.y,0x66e0ff,14);this.snd('collect',.55);this.buzz(12);if(this.combo>=3){this.cameras.main.setZoom(1.035);this.tweens.add({targets:this.cameras.main,zoom:1,duration:180})}
     g.s.destroy();g.gl.destroy();this.gems.splice(i,1);this.spawnGem();this.updScore();this.lvGems++;this.updGoal();
     if(this.lvGems>=this.lv.goal){this.levelWin();return}
    }
@@ -482,6 +500,7 @@ class Main extends Phaser.Scene{
   this.snd('clear',.8);this.buzz([30,40,30,40,60]);
   this.burst(this.player.x,this.player.y,0xffe27a,40);
   this.ghosts.forEach(g=>{this.tweens.add({targets:g.s,alpha:0,duration:400})});
+  if(this.endless){this.endWin();return}
   const i=this.lvIdx,stars=this.round<=2?3:(this.round<=3?2:1);
   this.prog.stars[i]=Math.max(this.prog.stars[i],stars);
   const last=i===LEVELS.length-1;
@@ -509,6 +528,7 @@ class Main extends Phaser.Scene{
  }
  showOver(){
   this.state='over';this.hud.setVisible(false);
+  if(this.endless){this.endOver();return}
   const c=this.over=this.add.container(0,0).setDepth(6000);
   c.add(this.add.rectangle(W/2,H/2,W,H,0x1a0510,.84));
   c.add(this.txt(W/2,250,'لمسك شبحك!',70,'#ff7a9a'));
@@ -522,6 +542,38 @@ class Main extends Phaser.Scene{
   };
   mk(700,'حاول تاني',0xffc93a,0x8a5a00,()=>{this.snd('start');this.startLevel(this.lvIdx)},'#3a2200');
   mk(810,'الخريطة',0x7dd3ff,0x1a6a8a,()=>{this.snd('start');this.showMap()},'#06293a');
+ }
+ startEndless(n){
+  this.endless=true;this.estage=n;const base=n%10,src=LEVELS[base];
+  this.elv=Object.assign({},src,{name:'∞ '+(n+1)+' · '+src.name,goal:Math.min(40,10+n*2),h:Math.min(6,(src.h||0)+Math.floor(n/3)),b:Math.min(6,(src.b||0)+Math.floor(n/4)),k:Math.min(4,(src.k||0)+Math.floor(n/2)),obs:Math.min(16,src.obs+Math.floor(n/2)),boss:(n+1)%5===0?'زعيم اللانهاية':undefined,
+   intro:'اللانهاية، مرحلة '+(n+1)+'. كل مرحلة أصعب من اللي قبلها. اجمع '+Math.min(40,10+n*2)+' جوهرة.',outro:''});
+  this.lvIdx=base;
+  this.showStory('∞ لانهاية '+(n+1),this.elv.intro,()=>this.startLevel(base));
+ }
+ eBtn(c,y,label,col,stroke,fn,tc){const b=this.add.rectangle(W/2,y,380,86,col).setStrokeStyle(6,stroke).setInteractive({useHandCursor:true});const t=this.txt(W/2,y,label,36,tc,{style:{stroke:'#ffffff',strokeThickness:1}});b.on('pointerdown',fn);c.add([b,t])}
+ endBest(n){let b=0;try{b=Math.max(+localStorage.getItem('gy_end')||0,n);localStorage.setItem('gy_end',b)}catch(e){}return b}
+ endWin(){
+  const n=this.estage,b=this.endBest(n+1);
+  this.time.delayedCall(1200,()=>{this.hud.setVisible(false);
+   const c=this.over=this.add.container(0,0).setDepth(6000);
+   c.add(this.add.rectangle(W/2,H/2,W,H,0x041a0e,.88));
+   c.add(this.txt(W/2,200,'عديت اللانهاية '+(n+1),56,'#7dffb0'));
+   c.add(this.txt(W/2,330,'النقاط: '+this.score+'   ·   جولات: '+this.round,28,'#9ff0ff'));
+   c.add(this.txt(W/2,400,'أفضل مرحلة: '+b,30,'#ffd36b'));
+   this.eBtn(c,650,'المرحلة الجاية',0xffc93a,0x8a5a00,()=>{this.snd('start');this.over.destroy();this.over=null;this.startEndless(n+1)},'#3a2200');
+   this.eBtn(c,760,'الخريطة',0x7dd3ff,0x1a6a8a,()=>{this.snd('start');this.showMap()},'#06293a');
+   this.burst(W/2,260,0xffe27a,40)})
+ }
+ endOver(){
+  const n=this.estage,b=this.endBest(n+1);
+  const c=this.over=this.add.container(0,0).setDepth(6000);
+  c.add(this.add.rectangle(W/2,H/2,W,H,0x1a0510,.84));
+  c.add(this.txt(W/2,250,'لمسك شبحك!',70,'#ff7a9a'));
+  c.add(this.txt(W/2,350,'وصلت اللانهاية '+(n+1)+(n+1>=b&&n>0?'  (رقم قياسي!)':''),34,'#9ff0ff'));
+  c.add(this.txt(W/2,440,'أفضل مرحلة: '+b,32,'#ffd36b'));
+  this.eBtn(c,640,'كمّل من هنا',0xffc93a,0x8a5a00,()=>{this.snd('start');this.over.destroy();this.over=null;this.startEndless(n)},'#3a2200');
+  this.eBtn(c,750,'ابدأ من الأول',0xffa0d0,0x8a2a6a,()=>{this.snd('start');this.over.destroy();this.over=null;this.startEndless(0)},'#3a0a2a');
+  this.eBtn(c,860,'الخريطة',0x7dd3ff,0x1a6a8a,()=>{this.snd('start');this.showMap()},'#06293a');
  }
  share(){
   const url='https://mohamedelsayed16399-bit.github.io/ghost-yourself-game/';
@@ -540,3 +592,4 @@ function boot(){
 </script>
 </body>
 </html>
+
